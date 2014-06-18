@@ -24,25 +24,33 @@ import numpy
 import math
 
 # Define the variables for the read length and fold coverage, respectively
-readLength = [50]
-#readLength = [30, 35, 40, 45, 50, 55, 60, 75, 80, 100, 150, 250]
-foldCoverage = [50]
-#foldCoverage = [1, 2, 5, 10, 15, 20, 25, 30, 35, 40, 50, 75, 100]
+#readLength = [50]
+readLength = [30, 35, 40, 45, 50, 55, 60, 75, 80, 100, 150, 250]
+#foldCoverage = [50]
+foldCoverage = [1, 2, 5, 10, 15, 20, 25, 30, 35, 40, 50, 75, 100]
 
 # Initialize the required dictionaries
 vcfData = {}
 
 # Define the range of k-mer sizes for indexing of targets
-#kmer = [5, 7, 9, 11, 13, 15]
-kmer = [15]
+kmer = [5, 7, 9, 11, 13, 15, 17, 19]
+#kmer = [15]
 
-# For multiple files at once
-os.chdir("/media/nas/akoziol/Pipeline_development/SipprModelling/Sakai")
+# The path is still hardcoded as, most of the time, this script is run from within Pycharm.
+os.chdir("/media/nas/akoziol/Pipeline_development/SipprModelling/SE")
 path = os.getcwd()
-reference = "/media/nas/akoziol/Pipeline_development/SipprModelling/Sakai/reference/Escherichia_coli_O157_H7_str_Sakai.fas"
+
+os.chdir("%s/reference" % path)
+
+referenceFile = glob.glob("*.fa*")
+references = ["%s/reference/" % path + fastaFile for fastaFile in referenceFile]
+#reference = "Escherichia_coli_O157_H7_str_Sakai.fas"
 
 os.chdir("%s/targets" % path)
 targets = glob.glob("*.fa")
+
+outPath = "%s/outputs" % path
+
 
 def make_path(inPath):
     """from: http://stackoverflow.com/questions/273192/check-if-a-directory-exists-and-create-it-if-necessary \
@@ -54,7 +62,7 @@ def make_path(inPath):
             raise
 
 
-def createSimulatedFilesProcesses():
+def createSimulatedFilesProcesses(reference):
     """Creates a pool of processes, and maps data in a parallel fashion to createSimulatedFiles"""
     print "Creating simulated files"
     # Initialise the args list
@@ -69,12 +77,12 @@ def createSimulatedFilesProcesses():
         # eg. (30, 1), (30, 2), ... (30, 100), (35, 1), (35, 2), ... (150, 100)
         for rLength in readLength:
             for fCov in foldCoverage:
-                simulatedArgs.append((rLength, fCov))
+                simulatedArgs.append((rLength, fCov, reference))
                 # Use the map function and the tuple created above to process the data rapidly
         simulatedFilepool.map(createSimulatedFiles, simulatedArgs)
 
 
-def createSimulatedFiles((rLength, fCov)):
+def createSimulatedFiles((rLength, fCov, reference)):
     """Iterates over the readLength and foldCoverage lists to create folders (if necessary)\
      and perform analyses"""
     os.chdir(path)
@@ -297,8 +305,8 @@ def createVCF((rLength, fCov, target, size)):
 
 
 def createOutputFiles():
+
     print "\nCreating outputs"
-    outPath = "/media/nas/akoziol/Pipeline_development/SipprModelling/Sakai/outputs"
     make_path(outPath)
     os.chdir(outPath)
     outFile = open("SipprModelling_%s.csv" % start, "wb")
@@ -308,6 +316,7 @@ def createOutputFiles():
             for fCov in foldCoverage:
                 for target in targets:
                     for size in kmer:
+                        total1 = 0
                         sys.stdout.write('.')
                         filename = target.split('.')[0]
                         megaName = "rL%s_fC%s_%s_kmer%s" % (rLength, fCov, filename, size)
@@ -335,6 +344,7 @@ def createOutputFiles():
                             if re.search('#', line):
                                 pass
                             else:
+                                total1 += 1
                                 # Format of file
                                 # CHROM	    POS	ID	REF	ALT	QUAL FILTER	INFO	                                   FORMAT
                                 # adk-12	8	.	G	.	32.7	.	DP=1;AF1=0;AC1=0;DP4=0,1,0,0;MQ=29;FQ=-30.3	PL	0
@@ -355,12 +365,35 @@ def createOutputFiles():
                                     # If the called base (mapSeq) is identical to the reference base (refSeq)
                                     # - denoted by a ".", then set seq to equal refSeq, otherwise, pull the
                                     # value of mapSeq for seq
+                                    avgQual = sum(arrQual)/total1
                                     if mapSeq == ".":
                                         seq = refSeq
                                         match = 1
+                                    # This section corrects for the fact that during the conversion of bam files to vcf
+                                    # files, SNP calls and ambiguous calls look identical, except for the fact that for
+                                    # SNPs, the qualityScore (qual) tends to be higher than the surrounding bases,
+                                    # while ambiguous calls have a lower qualityScore - this loop screens for quality
+                                    # scores that are at least 10 lower than the score of the previous base
                                     else:
-                                        seq = mapSeq
-                                        match = 0
+                                        if float(arrQual[-1] - 10) >= 0:
+                                            prevValue = float(arrQual[-1] - 10)
+                                        else:
+                                            prevValue = 0
+                                        if float(qual) <= prevValue:
+                                            seq = refSeq
+                                            match = 1
+                                        else:
+                                            # This attempts to catch if there are two ambiguous bases in a row;
+                                            # they will hopefully have the same value
+                                            if float(qual) == prevValue:
+                                                seq = refSeq
+                                                match = 1
+                                            else:
+                                                # "True" SNPs seem to have increased qualityScore compared to the
+                                                # surrounding values, this will catch that
+                                                if float(qual) > prevValue:
+                                                    seq = mapSeq
+                                                    match = 0
                                     # Strip the "DP=" from dpLine
                                     DP = dpLine.split("=")[1]
                                     #vcfData[pos] = (fileName, target, refSeq, mapSeq, DP)
@@ -421,16 +454,18 @@ def createOutputFiles():
 
 def pipeline():
     """Calls all the functions in a way that they can be multi-processed"""
-    createSimulatedFilesProcesses()
-    faidxTargetsProcesses()
-    #indexTargetsProcesses()
-    indexTargets()
-    #Start the mapping operations
-    mappingProcesses()
-    sortingProcesses()
-    bamIndexingProcesses()
-    createVCFProcesses()
-    createOutputFiles()
+    for reference in references:
+
+        createSimulatedFilesProcesses(reference)
+        faidxTargetsProcesses()
+        #indexTargetsProcesses()
+        indexTargets()
+        #Start the mapping operations
+        mappingProcesses()
+        sortingProcesses()
+        bamIndexingProcesses()
+        createVCFProcesses()
+        createOutputFiles()
 
 
 start = time.time()
