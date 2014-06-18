@@ -36,6 +36,7 @@ vcfData = {}
 #kmer = [5, 7, 9, 11, 13, 15]
 kmer = [15]
 
+# For multiple files at once
 os.chdir("/media/nas/akoziol/Pipeline_development/SipprModelling/Sakai")
 path = os.getcwd()
 reference = "/media/nas/akoziol/Pipeline_development/SipprModelling/Sakai/reference/Escherichia_coli_O157_H7_str_Sakai.fas"
