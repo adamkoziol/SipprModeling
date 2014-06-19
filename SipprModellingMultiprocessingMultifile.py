@@ -459,6 +459,22 @@ def createOutputFiles(reference):
     outFile.close()
 
 
+def modifiedOutputs():
+    """Docstring"""
+    outFile = open("SipprModelling_%s.csv" % (start), "wb")
+    outFile.write("Strain\t")
+    for target in sorted(targets):
+        filename = target.split('.')[0]
+        print filename
+        outFile.write("%s\t" % filename)
+    for strain in vcfData:
+        outFile.write("\n%s\t" % strain)
+        for gene, ID in sorted(vcfData[strain].items()):
+            print "%s, %s" % (gene, ID)
+            outFile.write("%s\t" % ID)
+    outFile.close()
+
+
 def pipeline(reference, strain):
     """Calls all the functions in a way that they can be multi-processed"""
     createSimulatedFilesProcesses(reference, strain)
@@ -471,6 +487,7 @@ def pipeline(reference, strain):
     bamIndexingProcesses(strain)
     createVCFProcesses(strain)
     createOutputFiles(strain)
+    modifiedOutputs()
 
 
 def callPipeline():
@@ -492,6 +509,4 @@ callPipeline()
 
 print "\nElapsed Time: %s seconds" % (time.time() - start)
 
-for strain in vcfData:
-    for gene, ID in sorted(vcfData[strain].items()):
-        print "%s %s, %s" % (strain, gene, ID)
+
