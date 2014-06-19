@@ -465,6 +465,17 @@ def pipeline(reference):
     createVCFProcesses()
     createOutputFiles()
 
+
+def callPipeline():
+    """Depending on whether there are multiple references to process, there are different requirements
+    for the output file - one reference file is likely for modelling multiple parameters, while multiple
+    files are likely used to compare the results from a single set of parameters on multiple genomes"""
+    if len(references) == 1:
+        pipeline(references)
+    else:
+        for reference in references:
+            pipeline(reference)
+
 start = time.time()
-pipeline()
+callPipeline()
 print "\nElapsed Time: %s seconds" % (time.time() - start)
