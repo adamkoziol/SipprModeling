@@ -13,7 +13,7 @@ import glob
 # Shutil is useful for file moving/copying
 import shutil
 # prints variables in a form which can be used as input to the interpreter - similar to Data::Dumper?
-#import pprint
+import pprint
 # Regex
 import re
 import sys
@@ -29,15 +29,22 @@ readLength = [50]
 foldCoverage = [50]
 #foldCoverage = [1, 2, 5, 10, 15, 20, 25, 30, 35, 40, 50, 75, 100]
 
+from collections import defaultdict
+
 # Initialize the required dictionaries
-vcfData = {}
+#vcfData = {}
+def make_dict():
+   return defaultdict(make_dict)
+
+vcfData = defaultdict(make_dict)
+
 
 # Define the range of k-mer sizes for indexing of targets
 #kmer = [5, 7, 9, 11, 13, 15, 17, 19, 20]
 kmer = [20]
 
 # The path is still hardcoded as, most of the time, this script is run from within Pycharm.
-os.chdir("/media/nas/akoziol/Pipeline_development/SipprModelling/SE")
+os.chdir("/media/nas/akoziol/Pipeline_development/SipprModelling/zTest")
 path = os.getcwd()
 
 os.chdir("%s/reference" % path)
@@ -62,7 +69,7 @@ def make_path(inPath):
             raise
 
 
-def createSimulatedFilesProcesses(reference):
+def createSimulatedFilesProcesses(reference, strain):
     """Creates a pool of processes, and maps data in a parallel fashion to createSimulatedFiles"""
     print "Creating simulated files"
     # Initialise the args list
@@ -77,17 +84,17 @@ def createSimulatedFilesProcesses(reference):
         # eg. (30, 1), (30, 2), ... (30, 100), (35, 1), (35, 2), ... (150, 100)
         for rLength in readLength:
             for fCov in foldCoverage:
-                simulatedArgs.append((rLength, fCov, reference))
+                simulatedArgs.append((rLength, fCov, reference, strain))
                 # Use the map function and the tuple created above to process the data rapidly
         simulatedFilepool.map(createSimulatedFiles, simulatedArgs)
 
 
-def createSimulatedFiles((rLength, fCov, reference)):
+def createSimulatedFiles((rLength, fCov, reference, strain)):
     """Iterates over the readLength and foldCoverage lists to create folders (if necessary)\
      and perform analyses"""
     os.chdir(path)
     # Create a new folder(if necessary) at the appropriate location
-    newPath = "%s/tmp/rL%s/rL%s_fC%s" % (path, rLength, rLength, fCov)
+    newPath = "%s/tmp/%s/rL%s/rL%s_fC%s" % (path, strain, rLength, rLength, fCov)
     newFile = "%s/%s_%s" % (newPath, rLength, fCov)
     adjCov = float(fCov) * float(rLength)/250
     #print fCov, rLength, adjCov
@@ -168,7 +175,7 @@ def indexTargets():
                 sys.stdout.write('.')
 
 
-def mappingProcesses():
+def mappingProcesses(reference):
     """Mapping threads!"""
     os.chdir(path)
     print '\nPerforming reference mapping'
@@ -180,17 +187,17 @@ def mappingProcesses():
             for fCov in foldCoverage:
                 for target in targets:
                     for size in kmer:
-                        mappingProcessesArgs.append((rLength, fCov, target, size))
+                        mappingProcessesArgs.append((reference, rLength, fCov, target, size))
         mappingProcessesPool.map(mapping, mappingProcessesArgs)
     mappingProcessesPool.terminate()
     mappingProcessesPool.join()
 
 
-def mapping((rLength, fCov, target, size)):
+def mapping((reference, rLength, fCov, target, size)):
     """Performs the mapping of the simulated reads to the targets"""
     filename = target.split('.')[0]
     megaName = "rL%s_fC%s_%s_kmer%s" % (rLength, fCov, filename, size)
-    filePath = "%s/tmp/rL%s/rL%s_fC%s" % (path, rLength, rLength, fCov)
+    filePath = "%s/tmp/%s/rL%s/rL%s_fC%s" % (path, reference, rLength, rLength, fCov)
     newPath = "%s/%s" % (filePath, megaName)
     make_path(newPath)
     targetPath = "%s/targets/%s/%s_%s" % (path, filename, filename, size)
@@ -203,7 +210,7 @@ def mapping((rLength, fCov, target, size)):
         sys.stdout.write('.')
 
 
-def sortingProcesses():
+def sortingProcesses(reference):
     print "\nSorting bam files"
     sortingProcessesArgs = []
     if __name__ == '__main__':
@@ -213,19 +220,19 @@ def sortingProcesses():
             for fCov in foldCoverage:
                 for target in targets:
                     for size in kmer:
-                        sortingProcessesArgs.append((rLength, fCov, target, size))
+                        sortingProcessesArgs.append((reference, rLength, fCov, target, size))
         sortingProcessesPool.map(sorting, sortingProcessesArgs)
     sortingProcessesPool.terminate()
 
 
 
-def sorting((rLength, fCov, target, size)):
+def sorting((reference, rLength, fCov, target, size)):
     """Performs samtools sort to return a sorted bam file"""
     filename = target.split('.')[0]
     megaName = "rL%s_fC%s_%s_kmer%s" % (rLength, fCov, filename, size)
     sorted = megaName + "_sorted"
     sortedMegaName = megaName + "_sorted.bam"
-    filePath = "%s/tmp/rL%s/rL%s_fC%s" % (path, rLength, rLength, fCov)
+    filePath = "%s/tmp/%s/rL%s/rL%s_fC%s" % (path, reference, rLength, rLength, fCov)
     newPath = "%s/%s" % (filePath, megaName)
     #Sort the BAM file
     if not os.path.isfile("%s/%s" % (newPath, sortedMegaName)):
@@ -236,7 +243,7 @@ def sorting((rLength, fCov, target, size)):
         sys.stdout.write('.')
 
 
-def bamIndexingProcesses():
+def bamIndexingProcesses(reference):
     print '\nIndexing bam files'
     bamIndexingArgs = []
     if __name__ == '__main__':
@@ -246,18 +253,18 @@ def bamIndexingProcesses():
             for fCov in foldCoverage:
                 for target in targets:
                     for size in kmer:
-                        bamIndexingArgs.append((rLength, fCov, target, size))
+                        bamIndexingArgs.append((reference, rLength, fCov, target, size))
         bamIndexingPool.map(bamIndexing, bamIndexingArgs)
     bamIndexingPool.terminate()
     bamIndexingPool.join()
 
 
-def bamIndexing((rLength, fCov, target, size)):
+def bamIndexing((reference, rLength, fCov, target, size)):
     """Indexes the sorted bam files in order to visualize the assemblies with tablet - note this is OPTIONAL"""
     filename = target.split('.')[0]
     megaName = "rL%s_fC%s_%s_kmer%s" % (rLength, fCov, filename, size)
     sortedMegaName = megaName + "_sorted.bam"
-    filePath = "%s/tmp/rL%s/rL%s_fC%s" % (path, rLength, rLength, fCov)
+    filePath = "%s/tmp/%s/rL%s/rL%s_fC%s" % (path, reference, rLength, rLength, fCov)
     newPath = "%s/%s" % (filePath, megaName)
     indexedName = megaName + "_sorted.bai"
     if not os.path.isfile("%s/%s" % (newPath, indexedName)):
@@ -268,7 +275,7 @@ def bamIndexing((rLength, fCov, target, size)):
         sys.stdout.write('.')
 
 
-def createVCFProcesses():
+def createVCFProcesses(reference):
     print '\nCreating vcf files'
     createVCFArgs = []
     if __name__ == '__main__':
@@ -278,18 +285,18 @@ def createVCFProcesses():
             for fCov in foldCoverage:
                 for target in targets:
                     for size in kmer:
-                        createVCFArgs.append((rLength, fCov, target, size))
+                        createVCFArgs.append((reference, rLength, fCov, target, size))
         createVCFPool.map(createVCF, createVCFArgs)
     createVCFPool.terminate()
     createVCFPool.join()
 
 
-def createVCF((rLength, fCov, target, size)):
+def createVCF((reference, rLength, fCov, target, size)):
     """Creates the variant calling format files from which all relevant data can be pulled"""
     filename = target.split('.')[0]
     megaName = "rL%s_fC%s_%s_kmer%s" % (rLength, fCov, filename, size)
     sortedMegaName = megaName + "_sorted.bam"
-    filePath = "%s/tmp/rL%s/rL%s_fC%s" % (path, rLength, rLength, fCov)
+    filePath = "%s/tmp/%s/rL%s/rL%s_fC%s" % (path, reference, rLength, rLength, fCov)
     vcfFile = megaName + "_sorted.vcf"
     newPath = "%s/%s" % (filePath, megaName)
     faidxTarget = "%s/targets/faidxFiles/%s" % (path, target)
@@ -304,12 +311,12 @@ def createVCF((rLength, fCov, target, size)):
         sys.stdout.write('.')
 
 
-def createOutputFiles():
+def createOutputFiles(reference):
 
     print "\nCreating outputs"
     make_path(outPath)
     os.chdir(outPath)
-    outFile = open("SipprModelling_%s.csv" % start, "wb")
+    outFile = open("SipprModelling_%s_%s.csv" % (start, reference), "wb")
     outFile.write("readLength\tfoldCoverage\ttarget\tkmerLength\tMedianQualityScore\t"
                   "QualityScoreSD\tMedianFoldCoverage\tFoldCoverageSD\tMedianPercentID\tqualityMetric\n")
     for rLength in readLength:
@@ -320,7 +327,7 @@ def createOutputFiles():
                         sys.stdout.write('.')
                         filename = target.split('.')[0]
                         megaName = "rL%s_fC%s_%s_kmer%s" % (rLength, fCov, filename, size)
-                        filePath = "%s/tmp/rL%s/rL%s_fC%s" % (path, rLength, rLength, fCov)
+                        filePath = "%s/tmp/%s/rL%s/rL%s_fC%s" % (path, reference, rLength, rLength, fCov)
                         vcfFile = megaName + "_sorted.vcf"
                         newPath = "%s/%s" % (filePath, megaName)
                         outputFile = "%s/%s" % (newPath, vcfFile)
@@ -444,7 +451,7 @@ def createOutputFiles():
                             stdCov = numpy.std(arrCov)
                             avgID = sum(arrSum)/total * 100
                             qualMet = avgQual * avgCov
-
+                        vcfData[reference][filename] = avgID
                         outFile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
                                     % (rLength, fCov, filename, size, avgQual, stdQual, avgCov, stdCov, avgID, qualMet))
 
@@ -452,18 +459,18 @@ def createOutputFiles():
     outFile.close()
 
 
-def pipeline(reference):
+def pipeline(reference, strain):
     """Calls all the functions in a way that they can be multi-processed"""
-    createSimulatedFilesProcesses(reference)
+    createSimulatedFilesProcesses(reference, strain)
     faidxTargetsProcesses()
     #indexTargetsProcesses()
     indexTargets()
     #Start the mapping operations
-    mappingProcesses()
-    sortingProcesses()
-    bamIndexingProcesses()
-    createVCFProcesses()
-    createOutputFiles()
+    mappingProcesses(strain)
+    sortingProcesses(strain)
+    bamIndexingProcesses(strain)
+    createVCFProcesses(strain)
+    createOutputFiles(strain)
 
 
 def callPipeline():
@@ -471,11 +478,20 @@ def callPipeline():
     for the output file - one reference file is likely for modelling multiple parameters, while multiple
     files are likely used to compare the results from a single set of parameters on multiple genomes"""
     if len(references) == 1:
-        pipeline(references)
+        print "Please use the SipprModelling program for a single reference genome"
     else:
         for reference in references:
-            pipeline(reference)
+            refRegex = re.search(".+\/reference\/(.+).fas", reference)
+            strain = refRegex.group(1)
+            pipeline(reference, strain)
 
 start = time.time()
 callPipeline()
+
+
+
 print "\nElapsed Time: %s seconds" % (time.time() - start)
+
+for strain in vcfData:
+    for gene, ID in sorted(vcfData[strain].items()):
+        print "%s %s, %s" % (strain, gene, ID)
