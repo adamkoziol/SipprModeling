@@ -24,17 +24,17 @@ import numpy
 import math
 
 # Define the variables for the read length and fold coverage, respectively
-readLength = [50]
-#readLength = [30, 35, 40, 45, 50, 55, 60, 75, 80, 100, 150, 250]
-foldCoverage = [50]
-#foldCoverage = [1, 2, 5, 10, 15, 20, 25, 30, 35, 40, 50, 75, 100]
+#readLength = [50]
+readLength = [30, 35, 40, 45, 50, 55, 60, 75, 80, 100, 150, 250]
+#foldCoverage = [50]
+foldCoverage = [1, 2, 5, 10, 15, 20, 25, 30, 35, 40, 50, 75, 100]
 
 # Initialize the required dictionaries
 vcfData = {}
 
 # Define the range of k-mer sizes for indexing of targets
-#kmer = [5, 7, 9, 11, 13, 15, 17, 19, 20]
-kmer = [20]
+kmer = [5, 7, 9, 11, 13, 15, 17, 19, 20]
+#kmer = [20]
 
 # The path is still hardcoded as, most of the time, this script is run from within Pycharm.
 os.chdir("/media/nas/akoziol/Pipeline_development/SipprModelling/SE")
