@@ -25,7 +25,7 @@ import shlex
 #import argparse
 
 # Define the variables for the read length and fold coverage, respectively
-readLength = [30, 35, 40, 45, 50, 55, 60, 75, 80, 100, 150]
+readLength = [20, 25, 30, 35, 40]
 #readLength = [33]
 foldCoverage = [1, 2, 5, 10, 15, 20, 25, 30, 35, 40, 50, 75, 100]
 #foldCoverage = [1, 2, 3]
@@ -34,13 +34,15 @@ foldCoverage = [1, 2, 5, 10, 15, 20, 25, 30, 35, 40, 50, 75, 100]
 vcfData = {}
 
 # Define the range of k-mer sizes for indexing of targets
-kmer = [5, 7, 9, 11, 13, 15]
-#kmer = [5, 7, 9]
+# kmer = [5, 7, 9, 11, 13, 15, 17, 20]
+kmer = [20]
 
 
-os.chdir("/media/nas/akoziol/Pipeline_development/SipprModelling/SE")
+# os.chdir("/media/nas/akoziol/Pipeline_development/SipprModelling/SE")
+os.chdir("/media/nas/akoziol/Pipeline_development/50mers")
 path = os.getcwd()
-reference = "/media/nas/akoziol/Pipeline_development/SipprModelling/SE/reference/Escherichia_coli_O157_H7_str_Sakai.fas"
+# reference = "/media/nas/akoziol/Pipeline_development/SipprModelling/SE/reference/Escherichia_coli_O157_H7_str_Sakai.fas"
+reference = "/media/nas/akoziol/Pipeline_development/50mers/reference/Escherichia_coli_O157_H7_str_Sakai.fas"
 
 
 def make_path(inPath):
@@ -73,7 +75,7 @@ def createSimulatedFiles(SimulatedFileQueue):
         if not os.path.isfile("%s.fq" % newFile):
             #subprocess.Popen(shlex.split(artIlluminaCall), stdout=open(os.devnull, 'wb'))
             #subprocess.call(artIlluminaCall, shell=True, stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
-            sys.stdout.write('wub')
+            sys.stdout.write('.')
         else:
             sys.stdout.write('.')
         # signals to queue job is done
@@ -109,8 +111,8 @@ def faidxTargets(faidxQueue):
             faidxCommand = "samtools faidx %s" % file
             #subprocess.Popen(shlex.split(faidxCommand), stdout=open(os.devnull, 'wb'))
             subprocess.call(faidxCommand, shell=True, stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
-            shutil.move(faidxFile, faidxPath)
-            shutil.move(file, faidxPath)
+            # shutil.move(faidxFile, faidxPath)
+            # shutil.move(file, faidxPath)
             sys.stdout.write('.')
         else:
             sys.stdout.write('.')

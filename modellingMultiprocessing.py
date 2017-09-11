@@ -1,4 +1,3 @@
-#__author__ = 'blais'
 __author__ = 'akoziol'
 
 # Import the necessary modules
@@ -16,39 +15,63 @@ import shutil
 #import pprint
 # Regex
 import re
+# System tools
 import sys
+# Can import date, and calculate length of run, etc.
 import time
-import sys
+# Multiprocessing module
 from multiprocessing import Pool
+# Numerical python - used in the parsing of vcf files
 import numpy
+# Math module - used in the parsing of vcf files
 import math
+# Argument parser for user-inputted values, and a nifty help menu
+from argparse import ArgumentParser
 
-# Define the variables for the read length and fold coverage, respectively
-#readLength = [50]
-readLength = [30, 35, 40, 45, 50, 55, 60, 75, 80, 100, 150, 250]
-#foldCoverage = [50]
-foldCoverage = [1, 2, 5, 10, 15, 20, 25, 30, 35, 40, 50, 75, 100]
+#Parser for arguments
+parser = ArgumentParser(description='Perform modelling of parameters for GeneSipping')
+parser.add_argument('-v', '--version', action='version', version='%(prog)s v1.0')
+parser.add_argument('-i', '--input', required=True, help='Specify input directory')
+parser.add_argument('-l', '--readLength', required=True, help='Specify list of read lengths to be used e.g. 18, 19, 20, 21, 22')
+parser.add_argument('-f', '--foldCoverage', required=True, help='Specify list of fold coverage values to be used e.g. 1, 1.5, 2, 2.5, 5')
+parser.add_argument('-k', '--kmerLength', required=True, help='Specify list of kmer lengths to be used e.g. 5, 7, 11')
+
+# Get the arguments into a list
+args = vars(parser.parse_args())
+
+# Define variables from the arguments - there may be a more streamlined way to do this
+path = args['input']
+
+# Since the following three variables need to be lists, the string entered is split on the ,
+readLength = args['readLength'].split(",")
+foldCoverage = args['foldCoverage'].split(",")
+kmer = args['kmerLength'].split(",")
+
+# maxRL will be used in the fold coverage calculations during simulated file generation
+maxRL = readLength[-1]
 
 # Initialize the required dictionaries
 vcfData = {}
 
-# Define the range of k-mer sizes for indexing of targets
-kmer = [5, 7, 9, 11, 13, 15, 17, 19, 20]
-#kmer = [20]
+# Target files are in scriptPath/targets
+scriptPath = os.getcwd()
+os.chdir("%s/targets" % scriptPath)
+# Must have a .fa extension
+targetFiles = glob.glob("*.fa")
 
-# The path is still hardcoded as, most of the time, this script is run from within Pycharm.
-os.chdir("/media/nas/akoziol/Pipeline_development/SipprModelling/SE")
-path = os.getcwd()
+# Add targets to appropriate list
+targets = ["%s/targets/" % scriptPath + fastaFile for fastaFile in targetFiles]
 
+# Genome reference files need to be in "path/reference"
 os.chdir("%s/reference" % path)
 
+# File extension needs to be .fa .fas .fasta, but not .ffn .fsa, etc.
 referenceFile = glob.glob("*.fa*")
+
+# Add all the reference to the references list
 references = ["%s/reference/" % path + fastaFile for fastaFile in referenceFile]
-#reference = "Escherichia_coli_O157_H7_str_Sakai.fas"
 
-os.chdir("%s/targets" % path)
-targets = glob.glob("*.fa")
-
+# Define the path for the outputs
 outPath = "%s/outputs" % path
 
 
@@ -67,7 +90,7 @@ def createSimulatedFilesProcesses(reference):
     print "Creating simulated files"
     # Initialise the args list
     simulatedArgs = []
-    # Every Python module has it's __name__ defined and if this is '__main__',
+    # Every Python module has its __name__ defined and if this is '__main__',
     # it implies that the module is being run standalone by the user and we can do corresponding appropriate actions.
     # http://ibiblio.org/g2swap/byteofpython/read/module-name.html
     if __name__ == '__main__':
@@ -89,13 +112,24 @@ def createSimulatedFiles((rLength, fCov, reference)):
     # Create a new folder(if necessary) at the appropriate location
     newPath = "%s/tmp/rL%s/rL%s_fC%s" % (path, rLength, rLength, fCov)
     newFile = "%s/%s_%s" % (newPath, rLength, fCov)
-    adjCov = float(fCov) * float(rLength)/250
-    #print fCov, rLength, adjCov
+    # The adjusted coverage keeps the number of reads constant for each readLength value supplied.
+    # a modelling experiment with a readLength of 20 will have a adjCov that is 40% the value of
+    # one with a readLength of 50
+    adjCov = float(fCov) * float(rLength)/float(maxRL)
+    # If using Sakai as the reference, then multiplying the foldCoverage by the constant below
+    # will allow for the use of precise read lengths - using a foldCoverage value of 5 will yield almost
+    # exactly 500 000 reads
+    # adjCov = float(fCov) * 0.90935049 * float(rLength)/float(maxRL)
+
+    # Call art_illumina to simulate the reads into the appropriate folders - general format of system call:
+    # art_illumina -i /path-to-file/Escherichia_coli_O157_H7_str_Sakai.fas -l "readLength" -f "foldCoverage" \
+    # -m 225 -s 60 -o /path-to-folder/Appropriate_name
     artIlluminaCall = "art_illumina -i %s -l %s -f %s -o %s" % (reference, rLength, adjCov, newFile)
+    # If not using an adjusted coverage value, then uncomment the line below
+    # artIlluminaCall = "art_illumina -i %s -l %s -f %s -o %s" % (reference, rLength, float(fCov), newFile)
+
     make_path(newPath)
-    #Call art_illumina to simulate the reads into the appropriate folders
-    #art_illumina -i /path-to-file/Escherichia_coli_O157_H7_str_Sakai.fas -l "readLength" -f "foldCoverage" \
-    #-m 225 -s 60 -o /path-to-folder/Appropriate_name
+
     if not os.path.isfile("%s.fq" % newFile):
         sys.stdout.write('.')
         # Subprocess.call requires that the command be finished before the loop can continue
@@ -114,17 +148,18 @@ def faidxTargetsProcesses():
         # Initialise the pool of processes - it defaults to the number of processors
         faidxPool = Pool()
         faidxPool.map(faidxTargets, targets)
-    faidxPool.terminate()
-    faidxPool.join()
 
 
 def faidxTargets(file):
     """Creates .fai index files of the targets, which are necessary for the conversion
     of sorted BAM files to fastq files."""
+    # print json.dumps(file, sort_keys=True, indent=4, separators=(',', ': '))
+    fileName = os.path.split(file)[1]
     faidxFile = "%s.fai" % file
+    # print faidxFile
     faidxPath = "%s/targets/faidxFiles" % path
     make_path(faidxPath)
-    if not os.path.isfile("%s/%s" % (faidxPath, faidxFile)):
+    if not os.path.isfile("%s/%s.fai" % (faidxPath, fileName)):
         faidxCommand = "samtools faidx %s" % file
         subprocess.call(faidxCommand, shell=True, stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
         # Move the file and faidx-processed file to the appropriate folder for further processing
@@ -135,31 +170,23 @@ def faidxTargets(file):
         sys.stdout.write('.')
 
 
-# def indexTargetsProcesses():
-#     print '\nIndexing targets'
-#     indexTargetArgs = []
-#     if __name__ == '__main__':
-#         indexTargetsPool = Pool()
-#
-#                     indexTargetArgs.append((target, size))
-#         # Initialise the pool of processes - it defaults to the number of processors
-#         indexTargetsPool.map(indexTargets, indexTargetArgs)
-
-
 def indexTargets():
     """Performs smalt index on the targets using the range of k-mers stored in the variable kmer"""
     print '\nIndexing targets'
     for target in targets:
         for size in kmer:
-            filename = target.split('.')[0]
+            # Format the target names properly
+            filename = os.path.split(target)[1]
+            fileNoExt = filename.split(".")[0]
             # Create a new path to be created (if necessary) for the generation of the range of k-mers
-            indexPath = "%s/targets/%s/%s_%s" % (path, filename, filename, size)
+            indexPath = "%s/targets/%s/%s_%s" % (path, fileNoExt, fileNoExt, size)
             # Call the make_path function to make folders as necessary
             make_path(indexPath)
-            indexFileSMI = "%s.smi" % filename
-            indexFileSMA = "%s.sma" % filename
+            indexFileSMI = "%s.smi" % fileNoExt
+            indexFileSMA = "%s.sma" % fileNoExt
+            # Index the appropriate files
             if not os.path.isfile("%s/%s" % (indexPath, indexFileSMI)):
-                indexCommand = "smalt index -k %s -s 1 %s %s/targets/%s" % (size, filename, path, target)
+                indexCommand = "smalt index -k %s -s 1 %s %s/targets/faidxFiles/%s" % (size, fileNoExt, path, filename)
                 subprocess.call(indexCommand, shell=True, stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
                 shutil.move(indexFileSMI, indexPath)
                 shutil.move(indexFileSMA, indexPath)
@@ -182,21 +209,21 @@ def mappingProcesses():
                     for size in kmer:
                         mappingProcessesArgs.append((rLength, fCov, target, size))
         mappingProcessesPool.map(mapping, mappingProcessesArgs)
-    mappingProcessesPool.terminate()
-    mappingProcessesPool.join()
 
 
 def mapping((rLength, fCov, target, size)):
     """Performs the mapping of the simulated reads to the targets"""
-    filename = target.split('.')[0]
-    megaName = "rL%s_fC%s_%s_kmer%s" % (rLength, fCov, filename, size)
+    filename = os.path.split(target)[1]
+    fileNoExt = filename.split(".")[0]
+    megaName = "rL%s_fC%s_%s_kmer%s" % (rLength, fCov, fileNoExt, size)
     filePath = "%s/tmp/rL%s/rL%s_fC%s" % (path, rLength, rLength, fCov)
     newPath = "%s/%s" % (filePath, megaName)
     make_path(newPath)
-    targetPath = "%s/targets/%s/%s_%s" % (path, filename, filename, size)
+    targetPath = "%s/targets/%s/%s_%s" % (path, fileNoExt, fileNoExt, size)
+    # Map the files to the reference
     if not os.path.isfile("%s/%s.bam" % (newPath, megaName)):
         smaltMap = "smalt map -o %s/%s.bam -f bam -x %s/%s %s/%s_%s.fq" \
-                   % (newPath, megaName, targetPath, filename, filePath, rLength, fCov)
+                   % (newPath, megaName, targetPath, fileNoExt, filePath, rLength, fCov)
         subprocess.call(smaltMap, shell=True, stdout=open(os.devnull, 'wb'), stderr=open(os.devnull, 'wb'))
         sys.stdout.write('.')
     else:
@@ -204,6 +231,7 @@ def mapping((rLength, fCov, target, size)):
 
 
 def sortingProcesses():
+    """Multiprocessing for sorting bam files"""
     print "\nSorting bam files"
     sortingProcessesArgs = []
     if __name__ == '__main__':
@@ -215,14 +243,13 @@ def sortingProcesses():
                     for size in kmer:
                         sortingProcessesArgs.append((rLength, fCov, target, size))
         sortingProcessesPool.map(sorting, sortingProcessesArgs)
-    sortingProcessesPool.terminate()
-
 
 
 def sorting((rLength, fCov, target, size)):
     """Performs samtools sort to return a sorted bam file"""
-    filename = target.split('.')[0]
-    megaName = "rL%s_fC%s_%s_kmer%s" % (rLength, fCov, filename, size)
+    filename = os.path.split(target)[1]
+    fileNoExt = filename.split(".")[0]
+    megaName = "rL%s_fC%s_%s_kmer%s" % (rLength, fCov, fileNoExt, size)
     sorted = megaName + "_sorted"
     sortedMegaName = megaName + "_sorted.bam"
     filePath = "%s/tmp/rL%s/rL%s_fC%s" % (path, rLength, rLength, fCov)
@@ -248,14 +275,13 @@ def bamIndexingProcesses():
                     for size in kmer:
                         bamIndexingArgs.append((rLength, fCov, target, size))
         bamIndexingPool.map(bamIndexing, bamIndexingArgs)
-    bamIndexingPool.terminate()
-    bamIndexingPool.join()
 
 
 def bamIndexing((rLength, fCov, target, size)):
     """Indexes the sorted bam files in order to visualize the assemblies with tablet - note this is OPTIONAL"""
-    filename = target.split('.')[0]
-    megaName = "rL%s_fC%s_%s_kmer%s" % (rLength, fCov, filename, size)
+    filename = os.path.split(target)[1]
+    fileNoExt = filename.split(".")[0]
+    megaName = "rL%s_fC%s_%s_kmer%s" % (rLength, fCov, fileNoExt, size)
     sortedMegaName = megaName + "_sorted.bam"
     filePath = "%s/tmp/rL%s/rL%s_fC%s" % (path, rLength, rLength, fCov)
     newPath = "%s/%s" % (filePath, megaName)
@@ -280,19 +306,18 @@ def createVCFProcesses():
                     for size in kmer:
                         createVCFArgs.append((rLength, fCov, target, size))
         createVCFPool.map(createVCF, createVCFArgs)
-    createVCFPool.terminate()
-    createVCFPool.join()
 
 
 def createVCF((rLength, fCov, target, size)):
     """Creates the variant calling format files from which all relevant data can be pulled"""
-    filename = target.split('.')[0]
-    megaName = "rL%s_fC%s_%s_kmer%s" % (rLength, fCov, filename, size)
+    filename = os.path.split(target)[1]
+    fileNoExt = filename.split(".")[0]
+    megaName = "rL%s_fC%s_%s_kmer%s" % (rLength, fCov, fileNoExt, size)
     sortedMegaName = megaName + "_sorted.bam"
     filePath = "%s/tmp/rL%s/rL%s_fC%s" % (path, rLength, rLength, fCov)
     vcfFile = megaName + "_sorted.vcf"
     newPath = "%s/%s" % (filePath, megaName)
-    faidxTarget = "%s/targets/faidxFiles/%s" % (path, target)
+    faidxTarget = "%s/targets/faidxFiles/%s" % (path, filename)
     # Read this to understand why certain flags were used
     # http://samtools.sourceforge.net/mpileup.shtml
     if not os.path.isfile("%s/%s" % (newPath, vcfFile)):
@@ -305,7 +330,7 @@ def createVCF((rLength, fCov, target, size)):
 
 
 def createOutputFiles():
-
+    """Parses the vcf files created above to create a handy summary table of mapping stats"""
     print "\nCreating outputs"
     make_path(outPath)
     os.chdir(outPath)
@@ -318,19 +343,13 @@ def createOutputFiles():
                     for size in kmer:
                         total1 = 0
                         sys.stdout.write('.')
-                        filename = target.split('.')[0]
-                        megaName = "rL%s_fC%s_%s_kmer%s" % (rLength, fCov, filename, size)
+                        filename = os.path.split(target)[1]
+                        fileNoExt = filename.split(".")[0]
+                        megaName = "rL%s_fC%s_%s_kmer%s" % (rLength, fCov, fileNoExt, size)
                         filePath = "%s/tmp/rL%s/rL%s_fC%s" % (path, rLength, rLength, fCov)
                         vcfFile = megaName + "_sorted.vcf"
                         newPath = "%s/%s" % (filePath, megaName)
                         outputFile = "%s/%s" % (newPath, vcfFile)
-                        fileName = outputFile.split(".")[0]
-                        #fileName = fileName.split("_sorted")[0]
-                        #nameData = fileName.split("_")
-                        #rL = nameData[0].split("rL")[1]
-                        #fC = nameData[1].split("fC")[1]
-                        #target = nameData[2]
-                        #size = nameData[3].split("kmer")[1]
                         # Initialise the counter, which will be used to track lines in the vcf file - if positions in the
                         # target are not mapped, then the position field will jump ahead of the counter
                         count = 1
@@ -446,24 +465,24 @@ def createOutputFiles():
                             qualMet = avgQual * avgCov
 
                         outFile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
-                                    % (rLength, fCov, filename, size, avgQual, stdQual, avgCov, stdCov, avgID, qualMet))
+                                    % (rLength, fCov, fileNoExt, size, avgQual, stdQual, avgCov, stdCov, avgID, qualMet))
 
                         output.close()
     outFile.close()
 
 
-def pipeline(reference):
+def pipeline():
     """Calls all the functions in a way that they can be multi-processed"""
-    createSimulatedFilesProcesses(reference)
-    faidxTargetsProcesses()
-    #indexTargetsProcesses()
-    indexTargets()
-    #Start the mapping operations
-    mappingProcesses()
-    sortingProcesses()
-    bamIndexingProcesses()
-    createVCFProcesses()
-    createOutputFiles()
+    for reference in references:
+        createSimulatedFilesProcesses(reference)
+        faidxTargetsProcesses()
+        indexTargets()
+        #Start the mapping operations
+        mappingProcesses()
+        sortingProcesses()
+        bamIndexingProcesses()
+        createVCFProcesses()
+        createOutputFiles()
 
 start = time.time()
 pipeline()

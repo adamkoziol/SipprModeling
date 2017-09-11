@@ -24,27 +24,29 @@ import numpy
 import math
 
 # Define the variables for the read length and fold coverage, respectively
-readLength = [50]
+readLength = [21]
 #readLength = [30, 35, 40, 45, 50, 55, 60, 75, 80, 100, 150, 250]
-foldCoverage = [50]
-#foldCoverage = [1, 2, 5, 10, 15, 20, 25, 30, 35, 40, 50, 75, 100]
+#foldCoverage = [50]
+foldCoverage = [1, 2, 5, 10, 15, 20, 25, 30, 35, 40, 50, 75, 100]
 
 from collections import defaultdict
 
 # Initialize the required dictionaries
 #vcfData = {}
+
+
 def make_dict():
-   return defaultdict(make_dict)
+    return defaultdict(make_dict)
 
 vcfData = defaultdict(make_dict)
 
 
 # Define the range of k-mer sizes for indexing of targets
-#kmer = [5, 7, 9, 11, 13, 15, 17, 19, 20]
-kmer = [20]
+kmer = [5, 7, 9, 11, 13, 15, 17, 19, 20]
+# kmer = [20]
 
 # The path is still hardcoded as, most of the time, this script is run from within Pycharm.
-os.chdir("/media/nas/akoziol/Pipeline_development/SipprModelling/zTest")
+os.chdir("/media/nas1/akoziol/Pipeline_development/SipprModelling/21merMapping")
 path = os.getcwd()
 
 os.chdir("%s/reference" % path)
@@ -320,142 +322,142 @@ def createOutputFiles(reference):
     outFile.write("readLength\tfoldCoverage\ttarget\tkmerLength\tMedianQualityScore\t"
                   "QualityScoreSD\tMedianFoldCoverage\tFoldCoverageSD\tMedianPercentID\tqualityMetric\n")
     for rLength in readLength:
-            for fCov in foldCoverage:
-                for target in targets:
-                    for size in kmer:
-                        total1 = 0
-                        sys.stdout.write('.')
-                        filename = target.split('.')[0]
-                        megaName = "rL%s_fC%s_%s_kmer%s" % (rLength, fCov, filename, size)
-                        filePath = "%s/tmp/%s/rL%s/rL%s_fC%s" % (path, reference, rLength, rLength, fCov)
-                        vcfFile = megaName + "_sorted.vcf"
-                        newPath = "%s/%s" % (filePath, megaName)
-                        outputFile = "%s/%s" % (newPath, vcfFile)
-                        fileName = outputFile.split(".")[0]
-                        #fileName = fileName.split("_sorted")[0]
-                        #nameData = fileName.split("_")
-                        #rL = nameData[0].split("rL")[1]
-                        #fC = nameData[1].split("fC")[1]
-                        #target = nameData[2]
-                        #size = nameData[3].split("kmer")[1]
-                        # Initialise the counter, which will be used to track lines in the vcf file - if positions in the
-                        # target are not mapped, then the position field will jump ahead of the counter
-                        count = 1
-                        # Initialise the arrays, which will keep track of the appropriate values for each dataset
-                        arrQual = []
-                        arrCov = []
-                        arrSum = []
-                        output = open(outputFile, "r")
-                        for line in output:
-                            # vcf files have 36 commented out lines at the top of each file - these are not necessary
-                            if re.search('#', line):
+        for fCov in foldCoverage:
+            for target in targets:
+                for size in kmer:
+                    total1 = 0
+                    sys.stdout.write('.')
+                    filename = target.split('.')[0]
+                    megaName = "rL%s_fC%s_%s_kmer%s" % (rLength, fCov, filename, size)
+                    filePath = "%s/tmp/%s/rL%s/rL%s_fC%s" % (path, reference, rLength, rLength, fCov)
+                    vcfFile = megaName + "_sorted.vcf"
+                    newPath = "%s/%s" % (filePath, megaName)
+                    outputFile = "%s/%s" % (newPath, vcfFile)
+                    fileName = outputFile.split(".")[0]
+                    #fileName = fileName.split("_sorted")[0]
+                    #nameData = fileName.split("_")
+                    #rL = nameData[0].split("rL")[1]
+                    #fC = nameData[1].split("fC")[1]
+                    #target = nameData[2]
+                    #size = nameData[3].split("kmer")[1]
+                    # Initialise the counter, which will be used to track lines in the vcf file - if positions in the
+                    # target are not mapped, then the position field will jump ahead of the counter
+                    count = 1
+                    # Initialise the arrays, which will keep track of the appropriate values for each dataset
+                    arrQual = []
+                    arrCov = []
+                    arrSum = []
+                    output = open(outputFile, "r")
+                    for line in output:
+                        # vcf files have 36 commented out lines at the top of each file - these are not necessary
+                        if re.search('#', line):
+                            pass
+                        else:
+                            total1 += 1
+                            # Format of file
+                            # CHROM	    POS	ID	REF	ALT	QUAL FILTER	INFO	                                   FORMAT
+                            # adk-12	8	.	G	.	32.7	.	DP=1;AF1=0;AC1=0;DP4=0,1,0,0;MQ=29;FQ=-30.3	PL	0
+                            # data[0] [1]  [2] [3]  [4] [5]    [6]  [7]
+                            data = line.split("\t")
+                            #target = data[0]
+                            pos = data[1]
+                            refSeq = data[3]
+                            mapSeq = data[4]
+                            qual = data[5]
+                            # Depth of coverage is reported prior to the first ";"
+                            dpLine = data[7].split(";")[0]
+                            # For now, I'm skipping lines that indicated the presence of a possible indel
+                            # - I may return to this later
+                            if re.search("INDEL", dpLine):
                                 pass
                             else:
-                                total1 += 1
-                                # Format of file
-                                # CHROM	    POS	ID	REF	ALT	QUAL FILTER	INFO	                                   FORMAT
-                                # adk-12	8	.	G	.	32.7	.	DP=1;AF1=0;AC1=0;DP4=0,1,0,0;MQ=29;FQ=-30.3	PL	0
-                                # data[0] [1]  [2] [3]  [4] [5]    [6]  [7]
-                                data = line.split("\t")
-                                #target = data[0]
-                                pos = data[1]
-                                refSeq = data[3]
-                                mapSeq = data[4]
-                                qual = data[5]
-                                # Depth of coverage is reported prior to the first ";"
-                                dpLine = data[7].split(";")[0]
-                                # For now, I'm skipping lines that indicated the presence of a possible indel
-                                # - I may return to this later
-                                if re.search("INDEL", dpLine):
-                                    pass
+                                # If the called base (mapSeq) is identical to the reference base (refSeq)
+                                # - denoted by a ".", then set seq to equal refSeq, otherwise, pull the
+                                # value of mapSeq for seq
+                                avgQual = sum(arrQual)/total1
+                                if mapSeq == ".":
+                                    seq = refSeq
+                                    match = 1
+                                # This section corrects for the fact that during the conversion of bam files to vcf
+                                # files, SNP calls and ambiguous calls look identical, except for the fact that for
+                                # SNPs, the qualityScore (qual) tends to be higher than the surrounding bases,
+                                # while ambiguous calls have a lower qualityScore - this loop screens for quality
+                                # scores that are at least 10 lower than the score of the previous base
                                 else:
-                                    # If the called base (mapSeq) is identical to the reference base (refSeq)
-                                    # - denoted by a ".", then set seq to equal refSeq, otherwise, pull the
-                                    # value of mapSeq for seq
-                                    avgQual = sum(arrQual)/total1
-                                    if mapSeq == ".":
+                                    if float(arrQual[-1] - 10) >= 0:
+                                        prevValue = float(arrQual[-1] - 10)
+                                    else:
+                                        prevValue = 0
+                                    if float(qual) <= prevValue:
                                         seq = refSeq
                                         match = 1
-                                    # This section corrects for the fact that during the conversion of bam files to vcf
-                                    # files, SNP calls and ambiguous calls look identical, except for the fact that for
-                                    # SNPs, the qualityScore (qual) tends to be higher than the surrounding bases,
-                                    # while ambiguous calls have a lower qualityScore - this loop screens for quality
-                                    # scores that are at least 10 lower than the score of the previous base
                                     else:
-                                        if float(arrQual[-1] - 10) >= 0:
-                                            prevValue = float(arrQual[-1] - 10)
-                                        else:
-                                            prevValue = 0
-                                        if float(qual) <= prevValue:
+                                        # This attempts to catch if there are two ambiguous bases in a row;
+                                        # they will hopefully have the same value
+                                        if float(qual) == prevValue:
                                             seq = refSeq
                                             match = 1
                                         else:
-                                            # This attempts to catch if there are two ambiguous bases in a row;
-                                            # they will hopefully have the same value
-                                            if float(qual) == prevValue:
-                                                seq = refSeq
-                                                match = 1
-                                            else:
-                                                # "True" SNPs seem to have increased qualityScore compared to the
-                                                # surrounding values, this will catch that
-                                                if float(qual) > prevValue:
-                                                    seq = mapSeq
-                                                    match = 0
-                                    # Strip the "DP=" from dpLine
-                                    DP = dpLine.split("=")[1]
-                                    #vcfData[pos] = (fileName, target, refSeq, mapSeq, DP)
-                                    # If pos > count, then there is a gap in the mapping (or a deletion, but ignoring
-                                    # this possibility for now). For my purposes, I want to have data reported for
-                                    # every position, whether it is present in the vcf file or not, so I will use count
-                                    # as the position, "-" as the seq, and 0 as the quality and depth of coverage
-                                    if int(pos) > count:
-                                        #print int(pos) - count, pos, count, range(count, int(pos))
-                                        # the number of skipped positions is equal to the value for pos - count
-                                        # For each skipped position (i), set appropriate variables to appropriate values
-                                        for i in range(count, int(pos)):
-                                            posAdj = count
-                                            seqAdj = "-"
-                                            matchAdj = 0
-                                            qualAdj = 0
-                                            DPAdj = 0
-                                            #vcfData[fileName][rL][fC][target][size][int(posAdj)][seqAdj][matchAdj][qualAdj] = DP
-                                            arrQual.append(float(qualAdj))
-                                            arrCov.append(float(DPAdj))
-                                            arrSum.append(float(matchAdj))
-                                            count += 1
-                                            if int(pos) == count:
-                                                #vcfData[fileName][rL][fC][target][size][int(pos)][seq][match][qual] = DP
-                                                arrQual.append(float(qual))
-                                                arrCov.append(float(DP))
-                                                arrSum.append(float(match))
-                                                count += 1
-                                    else:
-                                        #vcfData[fileName][rL][fC][target][size][int(pos)][seq][match][qual] = DP
-                                        arrQual.append(float(qual))
-                                        arrCov.append(float(DP))
-                                        arrSum.append(float(match))
+                                            # "True" SNPs seem to have increased qualityScore compared to the
+                                            # surrounding values, this will catch that
+                                            if float(qual) > prevValue:
+                                                seq = mapSeq
+                                                match = 0
+                                # Strip the "DP=" from dpLine
+                                DP = dpLine.split("=")[1]
+                                #vcfData[pos] = (fileName, target, refSeq, mapSeq, DP)
+                                # If pos > count, then there is a gap in the mapping (or a deletion, but ignoring
+                                # this possibility for now). For my purposes, I want to have data reported for
+                                # every position, whether it is present in the vcf file or not, so I will use count
+                                # as the position, "-" as the seq, and 0 as the quality and depth of coverage
+                                if int(pos) > count:
+                                    #print int(pos) - count, pos, count, range(count, int(pos))
+                                    # the number of skipped positions is equal to the value for pos - count
+                                    # For each skipped position (i), set appropriate variables to appropriate values
+                                    for i in range(count, int(pos)):
+                                        posAdj = count
+                                        seqAdj = "-"
+                                        matchAdj = 0
+                                        qualAdj = 0
+                                        DPAdj = 0
+                                        #vcfData[fileName][rL][fC][target][size][int(posAdj)][seqAdj][matchAdj][qualAdj] = DP
+                                        arrQual.append(float(qualAdj))
+                                        arrCov.append(float(DPAdj))
+                                        arrSum.append(float(matchAdj))
                                         count += 1
-                        # In the case of no data being present in a file,
-                        total = count - 1
-                        if total == 0:
-                            avgQual = 0
-                            stdQual = 0
-                            avgCov = 0
-                            stdCov = 0
-                            avgID = 0
-                            qualMet = 0
-                        else:
-                            avgQual = sum(arrQual)/total
-                            stdQual = numpy.std(arrQual)
-                            avgCov = sum(arrCov)/total
-                            stdCov = numpy.std(arrCov)
-                            avgID = sum(arrSum)/total * 100
-                            qualMet = avgQual * avgCov
-                        vcfData[reference][filename] = avgID
-                        outFile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
-                                    % (rLength, fCov, filename, size, avgQual, stdQual, avgCov, stdCov, avgID, qualMet))
+                                        if int(pos) == count:
+                                            #vcfData[fileName][rL][fC][target][size][int(pos)][seq][match][qual] = DP
+                                            arrQual.append(float(qual))
+                                            arrCov.append(float(DP))
+                                            arrSum.append(float(match))
+                                            count += 1
+                                else:
+                                    #vcfData[fileName][rL][fC][target][size][int(pos)][seq][match][qual] = DP
+                                    arrQual.append(float(qual))
+                                    arrCov.append(float(DP))
+                                    arrSum.append(float(match))
+                                    count += 1
+                    # In the case of no data being present in a file,
+                    total = count - 1
+                    if total == 0:
+                        avgQual = 0
+                        stdQual = 0
+                        avgCov = 0
+                        stdCov = 0
+                        avgID = 0
+                        qualMet = 0
+                    else:
+                        avgQual = sum(arrQual)/total
+                        stdQual = numpy.std(arrQual)
+                        avgCov = sum(arrCov)/total
+                        stdCov = numpy.std(arrCov)
+                        avgID = sum(arrSum)/total * 100
+                        qualMet = avgQual * avgCov
+                    vcfData[reference][filename] = avgID
+                    outFile.write("%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n"
+                                % (rLength, fCov, filename, size, avgQual, stdQual, avgCov, stdCov, avgID, qualMet))
 
-                        output.close()
+                    output.close()
     outFile.close()
 
 
@@ -465,13 +467,12 @@ def modifiedOutputs():
     outFile.write("Strain\t")
     for target in sorted(targets):
         filename = target.split('.')[0]
-        print filename
         outFile.write("%s\t" % filename)
     for strain in vcfData:
         outFile.write("\n%s\t" % strain)
         for gene, ID in sorted(vcfData[strain].items()):
-            print "%s, %s" % (gene, ID)
             outFile.write("%s\t" % ID)
+    print ""
     outFile.close()
 
 
@@ -494,12 +495,15 @@ def callPipeline():
     """Depending on whether there are multiple references to process, there are different requirements
     for the output file - one reference file is likely for modelling multiple parameters, while multiple
     files are likely used to compare the results from a single set of parameters on multiple genomes"""
+    count = 0
     if len(references) == 1:
         print "Please use the SipprModelling program for a single reference genome"
     else:
         for reference in references:
+            count += 1
             refRegex = re.search(".+\/reference\/(.+).fas", reference)
             strain = refRegex.group(1)
+            print "Processing file %s of %s" % (count, len(references))
             pipeline(reference, strain)
 
 start = time.time()
